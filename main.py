@@ -105,7 +105,7 @@ def calcChances(stats):
     elif(enemyHP <= ((playerATK * 2) - enemyDEF)): killChance = (playerHIT * playerCRIT) * 100    # chance of hit (with crit)
 
     # enemy attack
-    if(playerHP < (enemyATK - playerDEF)): deathChance = ((1 - killChance) * enemyHIT) * 100      # chance of hit (no crit)
+    if(playerHP < (enemyATK - playerDEF)): deathChance = ((1 - killChance) * enemyHIT) * 100                           # chance of hit (no crit)
     elif(playerHP < ((enemyATK * 2) - playerDEF)): deathChance = ((1 - killChance) * (enemyHIT * enemyCRIT)) * 100     # chance of hit (no crit)
 
     # follow-up attack
@@ -120,8 +120,8 @@ def calcChances(stats):
         elif(playerHP < ((enemyATK * 2 - playerDEF) + (enemyATK - playerDEF))): ((enemyHIT * enemyCRIT) * enemyHIT) * 100   # chance of doubling (1 crit)
         elif(playerHP < (enemyATK * 2 - playerDEF)): ((enemyHIT * enemyCRIT) * (enemyHIT * enemyCRIT)) * 100                # chance of doubling (2 crits)
 
-    # output results
 
+    # output results
     chance_img = np.ones((int(OUTPUT_FRAME_SIZE * .15), OUTPUT_FRAME_SIZE))
     killChance = str(round(killChance, 2))
     deathChance = str(round(deathChance, 2))
@@ -130,8 +130,6 @@ def calcChances(stats):
     cv2.putText(chance_img, kill_msg, org=(10, 25), fontFace=cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(0,255,255))
     cv2.putText(chance_img, death_msg,org=(10, 45), fontFace=cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(0,255,255))
     cv2.imshow("chance", chance_img)
-
-    return
 
 # list of numbers found in the image with their (x, y) coordinates
 for i in range(1, IMAGE_COUNT + 1):
@@ -179,9 +177,6 @@ for i in range(1, IMAGE_COUNT + 1):
 
             # Draw rectangles around each letter
             for centroid in centroids:
-                color = (255, 255, 255)
-                cv2.rectangle(bgr_image_output, (int(centroid[0]), int(centroid[1]), int(num.shape[1]), int(num.shape[0])),
-                          color, thickness=4)
                 forecast_nums.append([int(centroid[0]), int(centroid[1]), i])
 
         dash = cv2.imread('nums/na.PNG')
@@ -196,9 +191,6 @@ for i in range(1, IMAGE_COUNT + 1):
 
         # Draw rectangles around each letter
         for centroid in centroids:
-            color = (255, 255, 255)
-            cv2.rectangle(bgr_image_output, (int(centroid[0]), int(centroid[1]), int(dash.shape[1]), int(dash.shape[0])),
-                          color, thickness=4)
             forecast_nums.append([int(centroid[0]), int(centroid[1]), 0])
 
         # convert forecast nums to 2 digit numbers and organize them as stats
