@@ -4,11 +4,13 @@ import numpy as np
 # constants
 IMAGE_COUNT = 5
 MAX_WIDTH = 700
+OUTPUT_FRAME_SIZE = 400
 
 thresh = 0.60
 num_thresh = 0.85
 connectivity = 4
 template = cv2.imread('train/eyvel_win.PNG')
+
 
 # reshapes the output image
 def reshape(img):
@@ -119,8 +121,16 @@ def calcChances(stats):
         elif(playerHP < (enemyATK * 2 - playerDEF)): ((enemyHIT * enemyCRIT) * (enemyHIT * enemyCRIT)) * 100                # chance of doubling (2 crits)
 
     # output results
-    print("Chance of killing the enemy: " + str(killChance) + "%")
-    print("Chance of being killed: " + str(deathChance) + "%")
+
+    chance_img = np.ones((int(OUTPUT_FRAME_SIZE * .15), OUTPUT_FRAME_SIZE))
+    killChance = str(round(killChance, 2))
+    deathChance = str(round(deathChance, 2))
+    kill_msg = "Chance of killing the enemy: " + str(killChance) + "%"
+    death_msg = "Chance of being killed: " + str(deathChance) + "%"
+    cv2.putText(chance_img, kill_msg, org=(10, 25), fontFace=cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(0,255,255))
+    cv2.putText(chance_img, death_msg,org=(10, 45), fontFace=cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(0,255,255))
+    cv2.imshow("chance", chance_img)
+
     return
 
 # list of numbers found in the image with their (x, y) coordinates
@@ -147,15 +157,15 @@ for i in range(1, IMAGE_COUNT + 1):
     if(max_val > thresh):
         cv2.rectangle(bgr_image_output, topLeft, bottomRight, (0, 0, 255), 2)
 
-        ## NOTE: might be a good idea to template match the rectangle, not the whole image ##
-        ##       should improve performance to work in real-time                           ##
+        # extract the part of the image containing the battle forecast
+        subset_img = query_img[topLeft[1]:bottomRight[1], topLeft[0]:bottomRight[0]]
 
         for i in range(0, 10):
             # find numbers within the forecast
             num = cv2.imread('nums/r' + str(i) + '.PNG')
 
             gray_template = cv2.cvtColor(num, cv2.COLOR_BGR2GRAY)
-            gray_img = cv2.cvtColor(query_img, cv2.COLOR_BGR2GRAY)
+            gray_img = cv2.cvtColor(subset_img, cv2.COLOR_BGR2GRAY)
 
             scores = cv2.matchTemplate(gray_img, gray_template, cv2.TM_CCOEFF_NORMED)
 
@@ -197,6 +207,10 @@ for i in range(1, IMAGE_COUNT + 1):
 
         # calculate chances of killing/being killed
         calcChances(stats)
+    else:
+        # set display to be blank
+        chance_img = np.ones((int(OUTPUT_FRAME_SIZE * .15), OUTPUT_FRAME_SIZE))
+        cv2.imshow("chance", chance_img)
 
     # output image to screen
     bgr_image_output = reshape(bgr_image_output)
