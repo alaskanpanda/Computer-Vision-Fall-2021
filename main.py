@@ -1,6 +1,5 @@
 import cv2
 import numpy as np
-import sys
 
 # constants
 IMAGE_COUNT = 7
@@ -70,6 +69,25 @@ def getValuesFromNumbers(inputs):
     # return numbers
     return np.array(outputs)
 
+# given a numpy array of 2 digit numbers, sort them by order (up/down then left/right)
+def sortForecastNums(input):
+    sorted_forecast_nums = sorted(input, key=lambda element: (element[1], element[0]))
+    stats = []
+
+    i = 0
+    while i < len(sorted_forecast_nums):
+        if(sorted_forecast_nums[i][0] > sorted_forecast_nums[i+1][0]):
+            temp = sorted_forecast_nums[i]
+            sorted_forecast_nums[i] = sorted_forecast_nums[i+1]
+            sorted_forecast_nums[i+1] = temp
+
+        stats.append([sorted_forecast_nums[i][2], sorted_forecast_nums[i+1][2]])
+        i += 2
+
+
+
+
+    return stats
 
 # list of numbers found in the image with their (x, y) coordinates
 for i in range(1, IMAGE_COUNT + 1):
@@ -137,12 +155,14 @@ for i in range(1, IMAGE_COUNT + 1):
             color = (255, 255, 255)
             cv2.rectangle(bgr_image_output, (int(centroid[0]), int(centroid[1]), int(dash.shape[1]), int(dash.shape[0])),
                           color, thickness=4)
+            forecast_nums.append([int(centroid[0]), int(centroid[1]), 0])
 
-    organized_nums = getValuesFromNumbers(forecast_nums)
+    # convert forecast nums to 2 digit numbers and organize them
+    forecast_nums = getValuesFromNumbers(forecast_nums)
+    stats = sortForecastNums(forecast_nums)
+
     print("~~~~~~~~~~~~~~~~~~~~~~~")
-    for thing in organized_nums:
-        print(thing)
-
+    print(stats)
 
     bgr_image_output = reshape(bgr_image_output)
     cv2.imshow("Output", bgr_image_output)
