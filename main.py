@@ -38,6 +38,7 @@ def reshape(img):
 
     return img
 
+# reshape input image to match template image size
 def reshape_for_template(img):
     return cv2.resize(img, (730, 1870))
 
@@ -171,68 +172,70 @@ while True:
     query_img = gray
     bgr_image_output = bgr_image
 
-    # # do feature matching for video
-    # orb = cv2.ORB_create(nfeatures=10000)
-    # trainKeypoints, trainDesc = orb.detectAndCompute(template, None)
-    # queryKeypoints, queryDesc = orb.detectAndCompute(query_img, None)
-    #
-    # matcher = cv2.BFMatcher.create(cv2.NORM_L2)
-    # matches = matcher.knnMatch(queryDesc, trainDesc, k=2)
-    # good = []
-    # for m, n in matches:
-    #     if m.distance < 0.7 * n.distance:
-    #         good.append(m)
-    # matches = good
-    # print("Number of raw matches between training and query:", len(matches))
-    #
-    # bgr_matches = cv2.drawMatches(
-    #     img1=query_img, keypoints1=queryKeypoints,
-    #     img2=template, keypoints2=trainKeypoints,
-    #     matches1to2=matches, matchesMask=None, outImg=None
-    # )
-    # cv2.imshow("all matches", bgr_matches)
-    # cv2.waitKey(0)
-    #
-    # if len(matches) >= 3:
-    #     # Estimate affine transformation from training to query image points.
-    #     # Use the "least median of squares" method for robustness. It also detects outliers.
-    #     # Outliers are those points that have a large error relative to the median of errors.
-    #     src_pts = np.float32([trainKeypoints[m.trainIdx].pt for m in matches]).reshape(
-    #         -1, 1, 2)
-    #     dst_pts = np.float32([queryKeypoints[m.queryIdx].pt for m in matches]).reshape(
-    #         -1, 1, 2)
-    #     A_train_query, inliers = cv2.estimateAffine2D(
-    #         dst_pts, src_pts,
-    #         method=cv2.LMEDS)
-    #
-    # # Apply the affine warp to warp the training image to the query image.
-    # if A_train_query is not None and len(inliers) >= 3:
-    #     # Object detected! Warp the training image to the query image and blend the images.
-    #     print("Object detected! Found %d inlier matches" % sum(inliers))
-    #     warped_image = cv2.warpAffine(
-    #         src=query_img, M=A_train_query,
-    #         dsize=(template.shape[1], template.shape[0]))
-    #
-    #     cv2.imshow("match", warped_image.astype(np.uint8))
-    #     cv2.waitKey(0)
+    # do feature matching for video
+    orb = cv2.ORB_create()
+    trainKeypoints, trainDesc = orb.detectAndCompute(template, None)
+    queryKeypoints, queryDesc = orb.detectAndCompute(query_img, None)
+
+    matcher = cv2.BFMatcher.create(cv2.NORM_L2)
+    matches = matcher.knnMatch(queryDesc, trainDesc, k=2)
+    good = []
+    for m, n in matches:
+        if m.distance < 0.7 * n.distance:
+            good.append(m)
+    matches = good
+    print("Number of raw matches between training and query:", len(matches))
+
+    bgr_matches = cv2.drawMatches(
+        img1=query_img, keypoints1=queryKeypoints,
+        img2=template, keypoints2=trainKeypoints,
+        matches1to2=matches, matchesMask=None, outImg=None
+    )
+
+    A_train_query = None
+    warped_image = None
+    if len(matches) >= 40:
+        #cv2.imshow("all matches", reshape(bgr_matches))
+        #v2.waitKey(0)
+        # Estimate affine transformation from training to query image points.
+        # Use the "least median of squares" method for robustness. It also detects outliers.
+        # Outliers are those points that have a large error relative to the median of errors.
+        src_pts = np.float32([trainKeypoints[m.trainIdx].pt for m in matches]).reshape(
+            -1, 1, 2)
+        dst_pts = np.float32([queryKeypoints[m.queryIdx].pt for m in matches]).reshape(
+            -1, 1, 2)
+        A_train_query, inliers = cv2.estimateAffine2D(
+            dst_pts, src_pts,
+            method=cv2.LMEDS)
+
+    # Apply the affine warp to warp the training image to the query image.
+    if A_train_query is not None and len(inliers) >= 3:
+        # Object detected! Warp the training image to the query image and blend the images.
+        print("Object detected! Found %d inlier matches" % sum(inliers))
+        warped_image = cv2.warpAffine(
+            src=query_img, M=A_train_query,
+            dsize=(template.shape[1], template.shape[0]))
+
+        # cv2.imshow("match", reshape(warped_image.astype(np.uint8)))
+        # cv2.waitKey(0)
 
     # score the image to find the battle forecast
-    scores = cv2.matchTemplate(gray, template, cv2.TM_CCOEFF_NORMED)
-    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(scores)
+    #scores = cv2.matchTemplate(gray, template, cv2.TM_CCOEFF_NORMED)
+    #min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(scores)
 
 
     # if match exceeds threshold, we found the forecast
-    if(max_val > thresh) and not found_prev_frame:
+    if warped_image is not None and not found_prev_frame:
         found_prev_frame = True
 
         # set the location of the matched object
-        topLeft = max_loc
-        bottomRight = (topLeft[0] + (template.shape[1]), topLeft[1] + (template.shape[0]))
+        # topLeft = max_loc
+        # bottomRight = (topLeft[0] + (template.shape[1]), topLeft[1] + (template.shape[0]))
         forecast_nums = []
 
         # extract the part of the image containing the battle forecast
-        subset_img = query_img[topLeft[1]:bottomRight[1], topLeft[0]:bottomRight[0]]
-        subset_img = reshape_for_template(subset_img)
+        subset_img = warped_image
+        subset_img = reshape_for_template(subset_img)  # reshape battle forecast to match template size
 
         for i in range(0, 10):
             # find numbers within the forecast
@@ -280,7 +283,7 @@ while True:
 
         # calculate chances of killing/being killed
         calcChances(stats)
-    elif max_val > thresh:
+    elif warped_image is not None:
         found_prev_frame = True
     else:
         # set display to be blank
