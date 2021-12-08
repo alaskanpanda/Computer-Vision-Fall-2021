@@ -4,24 +4,27 @@ import sys
 
 # constants
 MAX_WIDTH = 700
-MAX_HEIGHT = 700
 OUTPUT_FRAME_SIZE = 400
 
-thresh = 0.60
-num_thresh = 0.8
+orb_thresh = 0.70
+num_thresh = 0.60
+min_matches = 10
 connectivity = 4
+mp4_file = "gameplay.mp4"
 template = cv2.imread('train/eyvel_win.PNG')
+video_capture = cv2.VideoCapture(mp4_file)     # Open video capture object
+
+if(mp4_file == "gameplay.mp4"):
+    orb_thresh = 0.70
+    num_thresh = 0.80
+    min_matches = 40
+elif(mp4_file == "gameplay_phone.mp4"):
+    orb_thresh = 0.70
+    num_thresh = 0.60
+    min_matches = 10
 template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
 
 found_prev_frame = False
-
-# # get camera feed
-# cap = cv2.VideoCapture(2)
-# if not cap.isOpened():
-#     print("cannot open camera")
-#     exit()
-
-video_capture = cv2.VideoCapture("gameplay.mp4")     # Open video capture object
 got_image, bgr_image = video_capture.read()       # Make sure we can read video
 if not got_image:
     print("Cannot read video source")
@@ -31,9 +34,6 @@ if not got_image:
 def reshape(img):
     if img.shape[1] > MAX_WIDTH:
         s = MAX_WIDTH / img.shape[1]
-        img = cv2.resize(img, dsize=None, fx=s, fy=s)
-    elif img.shape[0] > MAX_HEIGHT:
-        s = MAX_HEIGHT / img.shape[0]
         img = cv2.resize(img, dsize=None, fx=s, fy=s)
 
     return img
@@ -151,25 +151,17 @@ def calcChances(stats):
     death_msg = "Chance of being killed: " + str(deathChance) + "%"
     cv2.putText(chance_img, kill_msg, org=(10, 25), fontFace=cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(0,255,255))
     cv2.putText(chance_img, death_msg,org=(10, 45), fontFace=cv2.FONT_HERSHEY_PLAIN, fontScale=1, color=(0,255,255))
-    cv2.imshow("chance", chance_img)
+    cv2.imshow("Chance", chance_img)
 
 
 while True:
-    # # get video feed
-    # ret, bgr_image = cap.read()
-    #
-    # if not ret:
-    #     print("Can't receive stream")
-    #     break
 
     got_image, bgr_image = video_capture.read()
     if not got_image:
         break  # End of video; exit the while loop
 
-    gray = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2GRAY)
-
     # read in query image
-    query_img = gray
+    query_img = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2GRAY)
     bgr_image_output = bgr_image
 
     # do feature matching for video
@@ -177,14 +169,14 @@ while True:
     trainKeypoints, trainDesc = orb.detectAndCompute(template, None)
     queryKeypoints, queryDesc = orb.detectAndCompute(query_img, None)
 
+    # create and use matcher
     matcher = cv2.BFMatcher.create(cv2.NORM_L2)
     matches = matcher.knnMatch(queryDesc, trainDesc, k=2)
     good = []
     for m, n in matches:
-        if m.distance < 0.7 * n.distance:
+        if m.distance < orb_thresh * n.distance:
             good.append(m)
     matches = good
-    print("Number of raw matches between training and query:", len(matches))
 
     bgr_matches = cv2.drawMatches(
         img1=query_img, keypoints1=queryKeypoints,
@@ -194,9 +186,8 @@ while True:
 
     A_train_query = None
     warped_image = None
-    if len(matches) >= 40:
-        #cv2.imshow("all matches", reshape(bgr_matches))
-        #v2.waitKey(0)
+    if len(matches) >= min_matches:
+
         # Estimate affine transformation from training to query image points.
         # Use the "least median of squares" method for robustness. It also detects outliers.
         # Outliers are those points that have a large error relative to the median of errors.
@@ -211,26 +202,14 @@ while True:
     # Apply the affine warp to warp the training image to the query image.
     if A_train_query is not None and len(inliers) >= 3:
         # Object detected! Warp the training image to the query image and blend the images.
-        print("Object detected! Found %d inlier matches" % sum(inliers))
         warped_image = cv2.warpAffine(
             src=query_img, M=A_train_query,
             dsize=(template.shape[1], template.shape[0]))
-
-        # cv2.imshow("match", reshape(warped_image.astype(np.uint8)))
-        # cv2.waitKey(0)
-
-    # score the image to find the battle forecast
-    #scores = cv2.matchTemplate(gray, template, cv2.TM_CCOEFF_NORMED)
-    #min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(scores)
 
 
     # if match exceeds threshold, we found the forecast
     if warped_image is not None and not found_prev_frame:
         found_prev_frame = True
-
-        # set the location of the matched object
-        # topLeft = max_loc
-        # bottomRight = (topLeft[0] + (template.shape[1]), topLeft[1] + (template.shape[0]))
         forecast_nums = []
 
         # extract the part of the image containing the battle forecast
@@ -243,7 +222,6 @@ while True:
 
             gray_num = cv2.cvtColor(num, cv2.COLOR_BGR2GRAY)
             subset_copy = subset_img.copy()
-
             scores = cv2.matchTemplate(subset_img, gray_num, cv2.TM_CCOEFF_NORMED)
 
             # Threshold the image and extract centroids
@@ -253,13 +231,12 @@ while True:
 
             # Throw out the background centroid
             centroids = centroids[1:]
+            warped_image_copy = subset_img.copy()
+            warped_image_copy = cv2.cvtColor(warped_image_copy, cv2.COLOR_GRAY2RGB)
 
-            # Draw rectangles around each number
+            # Each centroid represents the location of a number, so save it as a forecast num
             for centroid in centroids:
                 forecast_nums.append([int(centroid[0]), int(centroid[1]), i])
-                cv2.rectangle(subset_copy,
-                              (int(centroid[0]), int(centroid[1]), int(num.shape[1]), int(num.shape[0])),
-                              color=(0,0,255), thickness=4)
 
 
         dash = cv2.imread('nums/na.PNG')
@@ -270,8 +247,10 @@ while True:
         thresholded = (scores > num_thresh).astype(np.uint8)
         statInfo = cv2.connectedComponentsWithStats(thresholded, connectivity, cv2.CV_32S)
         centroids = statInfo[3]
+
         # Throw out the background centroid
         centroids = centroids[1:]
+        thresh_copy = thresholded.copy()
 
         # Draw rectangles around each letter
         for centroid in centroids:
@@ -283,12 +262,16 @@ while True:
 
         # calculate chances of killing/being killed
         calcChances(stats)
+
+    # don't repeat calculations that are already shown
     elif warped_image is not None:
         found_prev_frame = True
+
+    # no battle forecast found, display nothing
     else:
         # set display to be blank
         chance_img = np.ones((int(OUTPUT_FRAME_SIZE * .15), OUTPUT_FRAME_SIZE))
-        cv2.imshow("chance", chance_img)
+        cv2.imshow("Chance", chance_img)
         found_prev_frame = False
 
     # output image to screen
