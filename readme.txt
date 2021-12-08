@@ -1,0 +1,1 @@
+This project requires opencv and numpy to be installed in your Python environment for this project to run successfully.
